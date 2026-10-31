@@ -213,14 +213,27 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
     console.log(`[manager] Logged in as ${manager.user.username}, prefix ${prefix}`);
   });
 
+  let failed = false;
   manager.on("error", (err) => {
-    console.error("[manager]", err);
+    // Eris puts the token in some error messages, so never print it
+    const message = String(err.message || err).split(token).join("<token>");
+    if (/Invalid token|Authentication failed/.test(message)) failed = true;
+    console.error(`[manager] ${message}`);
   });
 
-  manager.connect();
+  // Eris retries a bad bot token forever without saying so, so check it first
+  manager.getBotGateway().then(() => manager.connect(), (err) => {
+    if (err.code === 401) {
+      failed = true;
+      console.error("[manager] Login failed: the manager token is invalid");
+    } else {
+      manager.connect(); // e.g. a network hiccup, connect keeps retrying
+    }
+  });
 
   return {
     bot: manager,
+    failed: () => failed,
     stop: () => manager.disconnect({ reconnect: false }),
   };
 };

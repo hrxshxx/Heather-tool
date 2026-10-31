@@ -13,6 +13,8 @@ Heather keeps your Discord bots online 24/7 and sitting in voice channels. You c
 
 ## Features
 
+- Step-by-step setup when it starts
+- All bot tokens loaded from one `tokens.txt` file
 - Run many bots from one process
 - Each bot joins a voice channel on startup (unmuted, undeafened) and rejoins if it gets kicked or moved
 - Live terminal: add/remove bots and move them between channels without restarting
@@ -48,19 +50,59 @@ For every bot (and the manager):
 
 In Discord, turn on **User Settings → Advanced → Developer Mode**. Then right-click a voice channel → **Copy Channel ID**, or right-click yourself → **Copy User ID**.
 
-### 4. Start Heather
+### 4. Put your bot tokens in `tokens.txt`
+
+Copy `tokens.example.txt` to `tokens.txt` (or let Heather create it on first start) and paste your bot tokens, **one per line**. To give a bot its own voice channel, put the channel ID after its token:
+
+```
+BOT_TOKEN_1
+BOT_TOKEN_2 987654321098765432
+BOT_TOKEN_3
+```
+
+Lines starting with `#` are ignored. `tokens.txt` is in `.gitignore`, so it's never uploaded.
+
+### 5. Start Heather
 
 ```bash
 npm start
 ```
 
+Heather walks you through setup step by step (press Enter to skip any step):
+
+| Step | What you enter |
+|---|---|
+| 1. Manager bot token | Paste the manager token (hidden as `•••`). Skip to run without a manager. |
+| 2. Manager owners | Your Discord user ID(s), comma-separated. Only they can use the manager. |
+| 3. Manager prefix | The command prefix, Enter for `!`. |
+| 4. Bot tokens | Heather reads `tokens.txt`. If it's missing or empty, it creates it and waits until you've saved your tokens. |
+| 5. Voice channel | The voice channel for bots that don't have their own channel in `tokens.txt`. |
+
+Then all the bots start and you land at the `heather ❯` prompt:
+
+```
+[1/5] Manager bot token
+  Manager token (hidden): ••••••••••••••••
+[2/5] Manager owners
+  Your Discord user ID(s) (comma-separated): 123456789012345678
+[3/5] Manager prefix
+  Command prefix (Enter for !):
+[4/5] Bot tokens from tokens.txt
+  Found 3 bot token(s), 1 with their own voice channel.
+[5/5] Voice channel
+  Voice channel ID for the other bots (Enter to skip): 111111111111111111
+
+Setup done. 3 bot(s) starting.
+```
+
 ## Using the terminal
 
-Type commands at the `heather ❯` prompt:
+After setup, type commands at the `heather ❯` prompt:
 
 | Command | What it does |
 |---|---|
-| `add` | Paste a bot token, then a voice channel ID (Enter to skip). The bot starts immediately. |
+| `reload` | Re-read `tokens.txt`: starts newly added tokens and logs out bots whose token you removed. |
+| `add` | Paste one extra bot token, then a voice channel ID (Enter to skip). The bot starts immediately. |
 | `manager` | Paste the manager bot token. Starts it, or restarts it if it's running. |
 | `owner <user id>[,<user id>...]` | Who may use the manager. If no owners are set, any server admin can. |
 | `prefix <prefix>` | Manager command prefix (default `!`). |
@@ -74,19 +116,7 @@ Type commands at the `heather ❯` prompt:
 
 `<bot>` is the bot's number from `list`.
 
-A quick first run:
-
-```
-heather ❯ manager
-Manager token (hidden): ••••••••••••••••
-heather ❯ owner 123456789012345678
-heather ❯ add
-Bot token (hidden): ••••••••••••••••
-Voice channel ID (enter to skip): 987654321098765432
-heather ❯ list
-```
-
-Tokens pasted in the terminal only last while Heather is running. To start bots automatically, use one of the options below.
+The manager token and anything typed in the terminal only last while Heather is running; `tokens.txt` is read again on every start. To skip the manager steps, set the environment variables below.
 
 ## Manager bot commands (in Discord)
 
@@ -102,9 +132,9 @@ Only owners (or server admins when no owners are set) can use these. Others get 
 
 Discord menus show at most 25 options, so with more than 25 bots, servers or voice channels only the first 25 appear. Use `!join` for the rest.
 
-## Starting bots automatically (optional)
+## Other ways to configure (optional)
 
-**Environment variables** (recommended, e.g. a `.env` loader or Replit Secrets):
+`tokens.txt` is the main way to add bots. You can also use **environment variables** (e.g. Replit Secrets); a manager token or owners set here skip those setup steps:
 
 | Variable | Example | Meaning |
 |---|---|---|
@@ -127,7 +157,7 @@ const bots = [
 
 ## Hosting
 
-`keep_alive.js` starts a small web server on port 8080 that replies "I'm alive", so uptime pingers can keep free hosts (like Replit) awake. When Heather has no interactive terminal (most hosts), it skips the prompt and just runs the bots from environment variables / the `bots` list.
+`keep_alive.js` starts a small web server on port 8080 that replies "I'm alive", so uptime pingers can keep free hosts (like Replit) awake. When Heather has no interactive terminal (most hosts), it skips the setup steps and just runs the bots from `tokens.txt`, environment variables and the `bots` list. Set `PORT` to change the keep-alive port.
 
 ## Files
 
@@ -138,6 +168,7 @@ const bots = [
 | `manager.js` | Manager bot: prefix commands and panel |
 | `banner.js` | Banner and terminal colors |
 | `keep_alive.js` | Keep-alive web server |
+| `tokens.example.txt` | Template for `tokens.txt` |
 
 ## Notes
 

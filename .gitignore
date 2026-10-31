@@ -2,3 +2,4 @@ node_modules/
 channels.json
 .env
 .DS_Store
+tokens.txt
