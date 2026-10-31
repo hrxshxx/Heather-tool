@@ -1,0 +1,15 @@
+{
+  "name": "heather",
+  "version": "1.0.0",
+  "description": "Heather: a live terminal to keep Discord bots online and sitting in voice channels, with a manager bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "eris": "^0.17.2"
+  }
+}
