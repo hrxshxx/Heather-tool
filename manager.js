@@ -42,7 +42,13 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
   }
 
   // Panel page 1: pick a bot
+  // Shown when tokens.txt has no working tokens loaded yet
+  const NO_BOTS = "No bots are loaded. Put bot tokens in tokens.txt, then type `reload` in the Heather console.";
+
   function homeView(content = "") {
+    if (workers.length === 0) {
+      return { content, embeds: [{ title: "Bot manager", color: 0x5865f2, description: NO_BOTS }], components: [] };
+    }
     return {
       content,
       embeds: [{
@@ -133,7 +139,7 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
 
     panel: () => homeView(),
 
-    bots: () => workers.map((w, i) => `**${i + 1}. ${botName(w)}** — ${channelStatus(w)}`).join("\n"),
+    bots: () => workers.map((w, i) => `**${i + 1}. ${botName(w)}** — ${channelStatus(w)}`).join("\n") || NO_BOTS,
 
     join: ([number, channelID]) => {
       const i = findWorker(number);
@@ -161,11 +167,11 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
     const command = commands[name.toLowerCase()];
     if (!command) return;
     if (!allowed(msg.author.id, msg.member)) {
-      manager.createMessage(msg.channel.id, "You're not allowed to use the bot manager.").catch(console.error);
+      manager.createMessage(msg.channel.id, "You're not allowed to use the bot manager.").catch((err) => console.error(`[manager] ${err.message}`));
       return;
     }
 
-    manager.createMessage(msg.channel.id, command(args)).catch(console.error);
+    manager.createMessage(msg.channel.id, command(args)).catch((err) => console.error(`[manager] ${err.message}`));
   });
 
   manager.on("interactionCreate", (interaction) => {
@@ -173,7 +179,7 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
 
     const user = interaction.member || interaction.user;
     if (!allowed(user.id, interaction.member)) {
-      interaction.createMessage({ content: "You're not allowed to use the bot manager.", flags: 64 }).catch(console.error);
+      interaction.createMessage({ content: "You're not allowed to use the bot manager.", flags: 64 }).catch((err) => console.error(`[manager] ${err.message}`));
       return;
     }
 
@@ -185,7 +191,7 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
     // Bots can be removed from the terminal while a panel is open
     const botIndex = action === "bot" && value !== undefined ? Number(value) : i;
     if (action !== "home" && !workers[botIndex]) {
-      interaction.editParent(homeView("That bot was removed.")).catch(console.error);
+      interaction.editParent(homeView("That bot was removed.")).catch((err) => console.error(`[manager] ${err.message}`));
       return;
     }
 
@@ -206,7 +212,7 @@ module.exports = function startManager({ token, prefix, owner_ids }, workers) {
       return;
     }
 
-    interaction.editParent(view).catch(console.error);
+    interaction.editParent(view).catch((err) => console.error(`[manager] ${err.message}`));
   });
 
   manager.on("ready", () => {
