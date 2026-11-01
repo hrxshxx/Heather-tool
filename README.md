@@ -143,6 +143,9 @@ Discord menus show at most 25 options, so with more than 25 bots, servers or voi
 | `manager_token` | `TOKEN` | Manager bot token |
 | `owner_ids` | `123,456` | User IDs allowed to use the manager |
 | `prefix` | `!` | Manager prefix |
+| `headless` | `1` | Skip the setup steps and run straight from `tokens.txt` and these variables |
+
+Names work in lowercase or uppercase (`MANAGER_TOKEN`). Without an interactive terminal Heather always runs headless.
 
 **Or in the code**: fill in the `bots` list at the top of `index.js`:
 
@@ -154,6 +157,54 @@ const bots = [
 ```
 
 ⚠️ Never commit real tokens to a public repo. If a token leaks, reset it in the Developer Portal right away.
+
+## Pterodactyl panel
+
+Heather runs on Pterodactyl without the setup steps: it reads `tokens.txt` and the egg's variables, and every bot plus the manager run in one server (one Docker container).
+
+### 1. Import the egg (panel admin)
+
+1. Download [`egg-heather.json`](egg-heather.json).
+2. In the admin area go to **Nests** → pick or create a nest → **Import Egg**, choose the file and import.
+
+### 2. Create the server
+
+Create a server with the **Heather** egg. 256 MB RAM is plenty for a handful of bots. Fill in the variables:
+
+| Variable | What to enter |
+|---|---|
+| Manager Bot Token | Manager bot token. Leave empty for no manager. |
+| Manager Owner IDs | Your Discord user ID(s), comma-separated. |
+| Manager Prefix | Command prefix, default `!`. |
+| Default Voice Channel ID | Channel for bots without their own channel in `tokens.txt`. |
+| Git Repo Address | Where to install Heather from. Leave empty to upload the files yourself. |
+| Git Username / Git Access Token | Only for a **private** repo: your GitHub username and a [personal access token](https://github.com/settings/tokens) with read access to the repo. |
+| Auto Update | `1` pulls the latest Heather from git on every start. |
+
+The install script downloads Heather, runs `npm install` and creates `tokens.txt`.
+
+**Without git:** leave Git Repo Address empty and upload `index.js`, `bots.js`, `manager.js`, `banner.js`, `keep_alive.js`, `package.json`, `package-lock.json` and `tokens.txt` in the **Files** tab. Dependencies are installed on start.
+
+### 3. Add tokens and start
+
+1. In **Files**, open `tokens.txt` and paste your bot tokens, one per line (optionally followed by a voice channel ID). Save.
+2. Press **Start**. The console shows `Heather is running` once it's up.
+
+The console accepts the same commands as the terminal: `list`, `reload` (after editing `tokens.txt`), `vc`, `remove`, `help`. **Stop** sends `exit`, which logs all bots out cleanly.
+
+## Docker
+
+Everything runs in one container:
+
+```bash
+docker build -t heather .
+docker run -d --name heather --restart unless-stopped \
+  -v "$PWD/tokens.txt:/app/tokens.txt" \
+  -e MANAGER_TOKEN=your_manager_token -e OWNER_IDS=your_user_id -e CHANNEL_ID=voice_channel_id \
+  heather
+```
+
+`docker logs -f heather` shows the output. Add `-it` to `docker run` and use `docker attach heather` if you want to type console commands.
 
 ## Hosting
 
@@ -169,6 +220,8 @@ const bots = [
 | `banner.js` | Banner and terminal colors |
 | `keep_alive.js` | Keep-alive web server |
 | `tokens.example.txt` | Template for `tokens.txt` |
+| `egg-heather.json` | Pterodactyl egg |
+| `Dockerfile` | Single-container Docker image |
 
 ## Notes
 

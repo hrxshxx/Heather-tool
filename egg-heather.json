@@ -1,0 +1,133 @@
+{
+    "_comment": "Pterodactyl egg for Heather: keeps Discord bots online and sitting in voice channels",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-11-01T00:00:00+00:00",
+    "name": "Heather",
+    "author": "hrxshxx@users.noreply.github.com",
+    "description": "Heather keeps many Discord bots online 24/7 and sitting in voice channels from one server, with an optional manager bot to move them around. Put your bot tokens in tokens.txt (one per line).",
+    "features": null,
+    "docker_images": {
+        "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22",
+        "Node.js 20": "ghcr.io/parkervcp/yolks:nodejs_20"
+    },
+    "file_denylist": [],
+    "startup": "if [[ -d .git ]] && [[ \"{{AUTO_UPDATE}}\" == \"1\" ]]; then git pull --ff-only || true; fi; if [[ -f package.json ]]; then npm install --omit=dev --no-audit --no-fund; fi; node index.js",
+    "config": {
+        "files": "{}",
+        "startup": "{\r\n    \"done\": \"Heather is running\"\r\n}",
+        "logs": "{}",
+        "stop": "exit"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Heather install script\napt-get update\napt-get install -y git ca-certificates\n\nmkdir -p /mnt/server\ncd /mnt/server\n\nif [[ -z \"${GIT_ADDRESS}\" ]]; then\n    echo \"No git repo set, upload the Heather files yourself in the file manager.\"\nelse\n    # Add credentials for private repos\n    GIT_URL=\"${GIT_ADDRESS}\"\n    if [[ -n \"${USERNAME}\" && -n \"${ACCESS_TOKEN}\" ]]; then\n        GIT_URL=\"https://${USERNAME}:${ACCESS_TOKEN}@${GIT_ADDRESS#https://}\"\n    fi\n\n    if [[ -d .git ]]; then\n        echo \"Updating existing files\"\n        git pull --ff-only\n    else\n        # Clone next to any files already uploaded (like tokens.txt) and keep them\n        rm -rf /tmp/heather\n        git clone --depth 1 --branch \"${BRANCH:-main}\" \"${GIT_URL}\" /tmp/heather\n        cp -an /tmp/heather/. /mnt/server/\n        rm -rf /tmp/heather\n    fi\nfi\n\nif [[ -f package.json ]]; then\n    npm install --omit=dev --no-audit --no-fund\nfi\n\nif [[ ! -f tokens.txt && -f tokens.example.txt ]]; then\n    cp tokens.example.txt tokens.txt\nfi\n\necho \"Install done. Put your bot tokens in tokens.txt and start the server.\"\n",
+            "container": "node:22-bookworm-slim",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Manager Bot Token",
+            "description": "Token of the manager bot that controls the other bots with prefix commands and !panel. Leave empty to run without a manager.",
+            "env_variable": "MANAGER_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "Manager Owner IDs",
+            "description": "Discord user IDs allowed to use the manager, comma-separated. If empty, any server admin can use it.",
+            "env_variable": "OWNER_IDS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:500",
+            "field_type": "text"
+        },
+        {
+            "name": "Manager Prefix",
+            "description": "Command prefix for the manager bot.",
+            "env_variable": "PREFIX",
+            "default_value": "!",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:10",
+            "field_type": "text"
+        },
+        {
+            "name": "Default Voice Channel ID",
+            "description": "Voice channel for bots that don't have their own channel ID in tokens.txt. Leave empty to only keep them online.",
+            "env_variable": "CHANNEL_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Repo Address",
+            "description": "Repo to install Heather from. Leave empty to upload the files yourself.",
+            "env_variable": "GIT_ADDRESS",
+            "default_value": "https://github.com/hrxshxx/Heather-tool.git",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Branch",
+            "description": "Branch to install from.",
+            "env_variable": "BRANCH",
+            "default_value": "main",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:50",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Username",
+            "description": "GitHub username, only needed for a private repo.",
+            "env_variable": "USERNAME",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Git Access Token",
+            "description": "GitHub personal access token (read access to the repo), only needed for a private repo.",
+            "env_variable": "ACCESS_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Auto Update",
+            "description": "Pull the latest Heather from the git repo on every start (1 = on, 0 = off).",
+            "env_variable": "AUTO_UPDATE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|boolean",
+            "field_type": "text"
+        },
+        {
+            "name": "Headless",
+            "description": "Run without the step-by-step setup, straight from tokens.txt and these variables.",
+            "env_variable": "HEADLESS",
+            "default_value": "1",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|boolean",
+            "field_type": "text"
+        }
+    ]
+}

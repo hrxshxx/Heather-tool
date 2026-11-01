@@ -13,18 +13,23 @@ const bots = [
   // { token: "BOT_TOKEN_2", channel_id: "VOICE_CHANNEL_ID_2" },
 ];
 
+// Environment variables work in lowercase (manager_token) or uppercase
+// (MANAGER_TOKEN, as hosting panels like Pterodactyl set them)
+const env = (name) => (process.env[name.toUpperCase()] || process.env[name] || "").trim();
+const envList = (name) => env(name).split(",").map((v) => v.trim()).filter(Boolean);
+
 // The manager bot that controls all the bots with prefix commands.
 // owner_ids: user IDs allowed to use it. If empty, server admins can use it.
 const manager = {
-  token: process.env.manager_token || "",
-  prefix: process.env.prefix || "!",
-  owner_ids: (process.env.owner_ids || "").split(",").map((id) => id.trim()).filter(Boolean),
+  token: env("manager_token"),
+  prefix: env("prefix") || "!",
+  owner_ids: envList("owner_ids"),
 };
 
 // Bots can also come from environment variables:
 // token=TOKEN1,TOKEN2 and channel_id=ID (shared) or channel_id=ID1,ID2 (in order)
-const envTokens = (process.env.token || "").split(",").map((t) => t.trim()).filter(Boolean);
-const envChannelIDs = (process.env.channel_id || "").split(",").map((c) => c.trim()).filter(Boolean);
+const envTokens = envList("token");
+const envChannelIDs = envList("channel_id");
 envTokens.forEach((token, i) => {
   bots.push({ token, channel_id: envChannelIDs.length === 1 ? envChannelIDs[0] : envChannelIDs[i] });
 });
@@ -117,17 +122,15 @@ say();
 say(`  ${bold(purple("Heather"))} ${dim("· keeps your Discord bots online and in voice")}`);
 say();
 
-// Without an interactive terminal (e.g. a hosting service), just run the bots
-if (!process.stdin.isTTY) {
-  say(dim("No interactive terminal, running the configured bots only."));
-  if (manager.token) startManagerBot();
-  const loaded = loadTokensFile();
-  if (loaded) say(dim(`Loaded ${loaded.started} bot(s) from tokens.txt.`));
-  return;
-}
+// Headless mode skips the setup steps and runs straight from tokens.txt and
+// environment variables. It's used on hosting panels (HEADLESS=1) and whenever
+// there's no interactive terminal. Console commands still work.
+const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY;
+const headless = !interactive || /^(1|true|yes)$/i.test(env("headless"));
 
-const rl = readline.createInterface({ input: process.stdin, output: out, terminal: true });
+const rl = readline.createInterface({ input: process.stdin, output: out, terminal: interactive });
 rl.setPrompt(`${purple("heather")} ${pink("❯")} `);
+const showPrompt = (preserveCursor) => interactive && rl.prompt(preserveCursor);
 
 // Hidden input for tokens: while hiddenQuery is set, typed or pasted text is
 // shown as dots instead of the real characters
@@ -155,10 +158,10 @@ let busy = false;
 for (const method of ["log", "error"]) {
   const original = console[method].bind(console);
   console[method] = (...args) => {
-    out.write("\r\x1b[K");
+    if (interactive) out.write("\r\x1b[K");
     const time = dim(new Date().toLocaleTimeString());
     original(time, ...args.map((a) => (method === "error" && typeof a === "string" ? red(a) : a)));
-    if (!busy || asking) rl.prompt(true);
+    if (!busy || asking) showPrompt(true);
   };
 }
 
@@ -293,7 +296,7 @@ const commands = {
   },
 
   exit() {
-    rl.close();
+    shutdown();
   },
 };
 
@@ -310,15 +313,23 @@ rl.on("line", async (line) => {
     }
     busy = false;
   }
-  rl.prompt();
+  showPrompt();
 });
 
-rl.on("close", () => {
+function shutdown() {
   say(dim("\nLogging out..."));
   workers.forEach((w) => w.stop());
   if (managerHandle) managerHandle.stop();
   process.exit(0);
+}
+
+// Ctrl+D / Ctrl+C at the prompt quits. Headless, stdin may simply not exist
+// (e.g. plain docker run), so the bots keep running when it closes.
+rl.on("close", () => {
+  if (!headless) shutdown();
 });
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 
 // ---------- Step-by-step setup on start ----------
 
@@ -402,4 +413,27 @@ async function setup() {
   busy = false;
 }
 
-setup().then(() => rl.prompt());
+function startHeadless() {
+  say(dim("Headless mode: using tokens.txt and environment variables."));
+  if (manager.token) {
+    startManagerBot();
+    say(green(`Manager starting with prefix ${manager.prefix}`));
+  } else {
+    say(dim("No manager token set, manager bot not started."));
+  }
+
+  const loaded = loadTokensFile();
+  if (!loaded) {
+    say(yellow(`Created ${tokensFile}. Put your bot tokens in it, then type reload or restart.`));
+  } else {
+    say(green(`Loaded ${loaded.total} bot(s) from tokens.txt.`));
+  }
+  say(`Heather is running. ${dim("Type")} ${pink("help")} ${dim("for commands.")}`);
+}
+
+if (headless) {
+  startHeadless();
+  showPrompt();
+} else {
+  setup().then(() => showPrompt());
+}
