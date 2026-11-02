@@ -1,0 +1,8 @@
+# Heather bot tokens: one bot per line.
+# Copy this file to tokens.txt (or let Heather create it) and paste your tokens.
+# Add a voice channel ID after a token to give that bot its own channel:
+#
+#   BOT_TOKEN
+#   BOT_TOKEN VOICE_CHANNEL_ID
+#
+# Lines starting with # are ignored.
