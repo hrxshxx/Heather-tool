@@ -38,17 +38,34 @@ function startBot({ token, channel_id }) {
     });
   }
 
-  function joinVoiceChannel() {
-    if (!voiceChannelID || stopped || !bot.ready) return;
+  let attempts = 0;
+  let warnedMissing = false;
 
+  // Join the target channel unless the bot is already sitting in it. Safe to
+  // call often: it's retried on reconnects, when servers finish loading and
+  // every minute, so a missed join never waits for the next reconnect.
+  function joinVoiceChannel() {
+    if (!voiceChannelID || stopped || !bot.user) return;
+
+    // Servers that load after Eris' "ready" aren't cached yet; they're retried
+    // from guildAvailable and the check below
     const channel = bot.getChannel(voiceChannelID);
     if (!channel || !channel.guild) {
-      console.error(`${label} Voice channel ${voiceChannelID} not found`);
+      if (!warnedMissing) console.error(`${label} Voice channel ${voiceChannelID} not found yet, will keep trying`);
+      warnedMissing = true;
       return;
     }
+    warnedMissing = false;
+
+    const shard = bot.shards.get(channel.guild.shard.id);
+    if (!shard || shard.status !== "ready") return;
+    const state = channel.guild.voiceStates.get(bot.user.id);
+    if (state && state.channelID === voiceChannelID) return;
 
     sendVoiceState(channel.guild, voiceChannelID);
-    console.log(`${label} ${bot.user.username} joined voice channel ${channel.name}`);
+    attempts++;
+    if (attempts === 1) console.log(`${label} ${bot.user.username} joining voice channel ${channel.name}`);
+    if (attempts === 3) console.error(`${label} Still not in ${channel.name}, check the bot has View Channel and Connect there`);
   }
 
   // Move the bot to another voice channel, or out of voice when channelID is null
@@ -56,6 +73,7 @@ function startBot({ token, channel_id }) {
     const old = voiceChannelID && bot.getChannel(voiceChannelID);
     const next = channelID && bot.getChannel(channelID);
     voiceChannelID = channelID;
+    attempts = 0;
     if (bot.user) saveChannel(bot.user.id, channelID);
 
     // A bot has one voice state per server, so leave the old server first
@@ -71,6 +89,25 @@ function startBot({ token, channel_id }) {
     joinVoiceChannel();
   });
 
+  // Retry after reconnects and when a server with the channel finishes loading
+  bot.on("shardReady", joinVoiceChannel);
+  bot.on("shardResume", joinVoiceChannel);
+  const onGuild = (guild) => {
+    if (voiceChannelID && guild.channels.has(voiceChannelID)) joinVoiceChannel();
+  };
+  bot.on("guildAvailable", onGuild);
+  bot.on("guildCreate", onGuild);
+
+  // Catch anything the events above miss
+  const check = setInterval(joinVoiceChannel, 60 * 1000);
+
+  bot.on("voiceChannelJoin", (member, channel) => {
+    if (member.id === bot.user.id && channel.id === voiceChannelID) {
+      attempts = 0;
+      console.log(`${label} ${bot.user.username} is in voice channel ${channel.name}`);
+    }
+  });
+
   // Rejoin if the bot gets disconnected or moved out of the channel
   bot.on("voiceChannelLeave", (member, oldChannel) => {
     const target = voiceChannelID && bot.getChannel(voiceChannelID);
@@ -79,7 +116,11 @@ function startBot({ token, channel_id }) {
     }
   });
   bot.on("voiceChannelSwitch", (member, newChannel) => {
-    if (member.id === bot.user.id && voiceChannelID && newChannel.id !== voiceChannelID) {
+    if (member.id !== bot.user.id || !voiceChannelID) return;
+    if (newChannel.id === voiceChannelID) {
+      attempts = 0;
+      console.log(`${label} ${bot.user.username} is in voice channel ${newChannel.name}`);
+    } else {
       setTimeout(joinVoiceChannel, 5000);
     }
   });
@@ -90,6 +131,7 @@ function startBot({ token, channel_id }) {
     if (/Invalid token|Authentication failed/.test(message)) {
       failed = true;
       stopped = true;
+      clearInterval(check);
     }
     console.error(`${label} ${message}`); // or your preferred logger
   });
@@ -104,6 +146,7 @@ function startBot({ token, channel_id }) {
     setChannel,
     stop() {
       stopped = true;
+      clearInterval(check);
       bot.disconnect({ reconnect: false });
     },
   };
